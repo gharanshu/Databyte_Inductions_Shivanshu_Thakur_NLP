@@ -1,0 +1,96 @@
+### code
+#import necessary libraries
+
+import pandas as pd
+import numpy as np
+from ucimlrepo import fetch_ucirepo
+import matplotlib.pyplot as plt
+import seaborn as sns
+from imblearn.over_sampling import RandomOverSampler
+import sklearn as skl
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB, GaussianNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import confusion_matrix, classification_report
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+# i downloaded nltk to conver user input but i am not able to do it 
+import re
+
+# uncomment below mentioned code if you want to avoid scientific notations
+np.set_printoptions(suppress = True, precision=3) 
+
+# make the results reproduceable (HOPEFULLY :'-]) 
+np.random.seed(42)
+dataset = fetch_ucirepo(id=94)
+
+#to see the dataset info uncomment the print line
+print(dataset.metadata)
+#importing the dataset
+
+url =  'https://archive.ics.uci.edu/static/public/94/data.csv'
+df = pd.read_csv(url)
+#df.head()
+#df.columns
+#target column = Class
+#features = 57
+#data_cleaning
+print(f'Are there any Duplicated Columns: {df.columns.duplicated().any()}')
+print(f'Are there any null values in the data: {df.isnull().any().any()}')
+#df.describe()#
+#df.info()
+#checking for any wrong datatype than expected in the data: 
+#result: False #everything's fine :)
+#splitting data into train and test
+train, test = np.split(df.sample(frac = 1), [int(0.8*len(df))])
+print(f'Size of training data: {len(train)}\nSize of test data: {len(test)}') #80 percent training data, 20 percent test data
+train.describe()
+### since there is lot of variation among feature values i chose to scale the data so as to reduce it and prevent formation 
+### of bias, also spam: 1 is far exceeded by ham: 0 so it seemed fit to oversample the given data in training part 
+def scale_and_oversample_data(dataset, oversample = False):
+    X = df[df.columns[:-1]].values
+    y = df[df.columns[-1]].values
+    scaler = StandardScaler()
+    ROS = RandomOverSampler()
+
+    X = scaler.fit_transform(X)
+
+    if oversample:
+        X, y = ROS.fit_resample(X, y)
+    data = np.hstack((X, (y.reshape(-1,1))))
+    return dataset, X, y
+train, X_train, y_train =  scale_and_oversample_data(train, oversample = True)
+test, X_test, y_test = scale_and_oversample_data(test, oversample = False)
+reg = LogisticRegression()
+svm = SVC()
+knn = KNeighborsClassifier()
+nb = GaussianNB()
+models = [svm, nb, knn, reg]
+def select_model(model_list):
+    li = []
+    for model in models:
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        acc = skl.metrics.accuracy_score(y_test, y_pred)
+        li.append(acc)
+    i = li.index(max(li))
+    return models[i]
+model = select_model(models)
+print(f'Model Name: {model}')
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+print(f'CLASSIFICATION REPORT:\n\n{classification_report(y_test, y_pred)}')
+cm = confusion_matrix(y_test, y_pred)
+sns.heatmap(cm, 
+           annot = True,
+           fmt = 'g',
+           xticklabels=['Spam','Ham'],
+            yticklabels=['Spam','Ham'])
+plt.xlabel('Prediction',fontsize=13)
+plt.ylabel('Actual',fontsize=13)
+plt.title('Confusion Matrix',fontsize=17)
+plt.show()
